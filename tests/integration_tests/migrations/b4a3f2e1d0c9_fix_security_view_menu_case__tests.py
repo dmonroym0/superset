@@ -63,6 +63,46 @@ def _clear_security_view_menus() -> None:
     db.session.commit()
 
 
+SecuritySnapshot = list[tuple[str, list[tuple[str, list[str]]]]]
+
+
+def _snapshot_security_view_menus() -> SecuritySnapshot:
+    """
+    Record the pre-seeded ``security``/``Security`` view menus with their
+    permissions and role grants, so the fixture can put them back afterwards
+    and later tests see the bootstrapped metadata DB unchanged.
+    """
+    vms = (
+        db.session.query(ViewMenu)
+        .filter(ViewMenu.name.in_(["security", "Security"]))
+        .all()
+    )
+    return [
+        (
+            vm.name,
+            [
+                (pvm.permission.name, [role.name for role in pvm.role])
+                for pvm in db.session.query(PermissionView)
+                .filter(PermissionView.view_menu_id == vm.id)
+                .all()
+            ],
+        )
+        for vm in vms
+    ]
+
+
+def _restore_security_view_menus(snapshot: SecuritySnapshot) -> None:
+    for vm_name, pvms in snapshot:
+        vm = _make_view_menu(vm_name)
+        for permission_name, role_names in pvms:
+            permission = _add_permission(db.session, permission_name)
+            pvm = _add_permission_view(db.session, permission, vm)
+            for role_name in role_names:
+                role = db.session.query(Role).filter_by(name=role_name).one()
+                role.permissions.append(pvm)
+    db.session.commit()
+
+
 def _make_view_menu(name: str) -> ViewMenu:
     vm = ViewMenu(name=name)
     db.session.add(vm)
@@ -114,10 +154,12 @@ def _clear_test_roles() -> None:
 @pytest.fixture
 def _clean_security():
     _clear_test_roles()
+    snapshot = _snapshot_security_view_menus()
     _clear_security_view_menus()
     yield
     _clear_test_roles()
     _clear_security_view_menus()
+    _restore_security_view_menus(snapshot)
 
 
 @pytest.mark.usefixtures("app_context", "_clean_security")
