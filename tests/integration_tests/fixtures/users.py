@@ -48,9 +48,11 @@ def create_user_and_group(
     return user, group
 
 
-def cleanup(user, group):
+def cleanup(user, group, roles: list[Role] | None = None):
     security_manager.session.delete(user)
     security_manager.session.delete(group)
+    for role in roles or []:
+        security_manager.session.delete(role)
     security_manager.session.commit()
 
 
@@ -69,7 +71,7 @@ def create_user_group_with_dar(app_context: AppContext):
     )
     user, group = create_user_and_group("group1", "gamma_with_groups", [dar_role])
     yield
-    cleanup(user, group)
+    cleanup(user, group, [dar_role])
 
 
 @pytest.fixture
@@ -86,7 +88,7 @@ def create_gamma_user_group_with_dar(app_context: AppContext):
         "group1", "gamma_with_groups", [dar_role, gamma_role]
     )
     yield
-    cleanup(user, group)
+    cleanup(user, group, [dar_role])
 
 
 @pytest.fixture
@@ -99,7 +101,7 @@ def create_gamma_user_group_with_all_database(app_context: AppContext):
         "group1", "gamma_with_groups", [dar_role, gamma_role]
     )
     yield
-    cleanup(user, group)
+    cleanup(user, group, [dar_role])
 
 
 @pytest.fixture
